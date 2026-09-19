@@ -1,18 +1,15 @@
 #!/opt/bin/sh
-
 PROG=/opt/sbin/lighttpd
 CONF=/opt/etc/lighttpd/lighttpd.conf
 PIDFILE=/opt/var/run/lighttpd.pid
 LOGDIR=/opt/var/log/lighttpd
 
 start() {
-    echo -n " Starting lighttpd (Keen UI)... "
+    echo -n " Starting lighttpd (Reika-OS)... "
     if [ -f "$PIDFILE" ] && kill -0 $(cat "$PIDFILE") 2>/dev/null; then
-        echo "already running"
-        return
+        echo "already running"; return
     fi
-    mkdir -p "$LOGDIR"
-    mkdir -p /opt/var/run
+    mkdir -p "$LOGDIR" /opt/var/run
     $PROG -f "$CONF"
     sleep 2
     PID=$(ps | grep lighttpd | grep -v grep | awk '{print $1}' | head -1)
@@ -20,8 +17,7 @@ start() {
         echo "$PID" > "$PIDFILE"
         echo "done (pid $PID)"
     else
-        echo "failed"
-        tail -5 "$LOGDIR/error.log" 2>/dev/null
+        echo "failed"; tail -5 "$LOGDIR/error.log" 2>/dev/null
     fi
 }
 
@@ -33,20 +29,14 @@ stop() {
     else
         killall lighttpd 2>/dev/null
     fi
-    sleep 1
-    echo "done"
+    sleep 1; echo "done"
 }
 
-restart() {
-    stop
-    sleep 1
-    start
-}
+restart() { stop; sleep 1; start; }
 
 status() {
-    if ps | grep lighttpd | grep -v grep > /dev/null; then
-        PID=$(ps | grep lighttpd | grep -v grep | awk '{print $1}' | head -1)
-        echo "lighttpd is running (pid $PID)"
+    if ps | grep lighttpd | grep -v grep >/dev/null; then
+        echo "lighttpd is running"
     else
         echo "lighttpd is stopped"
     fi

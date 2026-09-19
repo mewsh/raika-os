@@ -2,282 +2,132 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Keen UI</title>
-<link rel="icon" href="/img/favicon.svg" type="image/svg+xml">
-<link rel="manifest" href="/manifest.json">
-<meta name="theme-color" content="#0e1116">
-<link rel="stylesheet" href="/css/style.css?v=30">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0000AA">
+<title>Reika-OS BIOS</title>
+<link rel="icon" href="logo/heade.jpg">
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-<header class="topbar">
-  <div class="brand">
-    <img src="/img/logo.svg" alt="Keen">
-    <span>Keen UI</span>
+<!-- ===== BOOT ===== -->
+<div id="post">
+  <div id="boot-black" class="boot-phase">
+    <pre id="bootlog"></pre>
   </div>
-  <nav class="tabs">
-    <button class="tab active" data-tab="dashboard">Дашборд</button>
-    <button class="tab" data-tab="system">Система</button>
-    <button class="tab" data-tab="keen">Keen</button>
-    <button class="tab" data-tab="wifi">WiFi</button>
-    <button class="tab" data-tab="network">Сеть</button>
-    <button class="tab" data-tab="clients">Клиенты</button>
-    <button class="tab" data-tab="components">Компоненты</button>
-    <button class="tab" data-tab="files">Файлы</button>
-    <button class="tab" data-tab="tools">Инструменты</button>
-    <a class="tab tab-link" id="orig-link" href="/" target="_blank">Оригинал ↗</a>
-  </nav>
-</header>
-
-<main class="content">
-
-  <section id="tab-dashboard" class="tab-panel active">
-    <h1>Обзор <span id="dash-updated" style="font-size:12px;color:var(--fg-dim);font-weight:400"></span></h1>
-    <div class="grid" id="dash-grid"></div>
-  </section>
-
-  <section id="tab-system" class="tab-panel">
-    <h1>Система</h1>
-    <div class="grid" id="sys-grid"></div>
-    <div class="toolbar" style="margin-top:16px">
-      <button id="sys-refresh">Обновить</button>
-      <button id="sys-reboot" class="danger">Перезагрузить роутер</button>
-    </div>
-  </section>
-
-  <section id="tab-keen" class="tab-panel">
-    <h1>Keen</h1>
-    <nav class="subtabs">
-      <button class="subtab active" data-sub="vnstat">vnstat</button>
-      <button class="subtab" data-sub="darkstat">darkstat</button>
-      <button class="subtab" data-sub="cron">cron</button>
-    </nav>
-    <div id="sub-vnstat" class="subpanel active">
-      <div class="toolbar">
-        <button id="vnstat-summary">Сводка</button>
-        <button id="vnstat-hours">Часы</button>
-        <button id="vnstat-days">Дни</button>
-        <button id="vnstat-months">Месяцы</button>
-        <button id="vnstat-top">Топ</button>
-        <button id="vnstat-refresh">Обновить</button>
-      </div>
-      <img id="vnstat-img" src="/img/vnstat-live.png" alt="vnstat" style="max-width:100%;border-radius:8px;background:#fff;margin-bottom:12px">
-      <pre class="json" id="vnstat-json">загрузка...</pre>
-    </div>
-    <div id="sub-darkstat" class="subpanel">
-      <div class="toolbar">
-        <button id="darkstat-refresh">Обновить</button>
-        <span id="darkstat-status-badge" class="badge">—</span>
-        <span style="color:var(--fg-dim);font-size:12px">авто: <span id="darkstat-timer">10</span>с</span>
-      </div>
-      <div class="grid" id="darkstat-overview"></div>
-      <h2 class="h2">Хосты</h2>
-      <div class="table-wrap">
-        <table class="data-table" id="darkstat-hosts">
-          <thead><tr><th>IP</th><th>MAC</th><th>In</th><th>Out</th><th>Total</th><th>Last seen</th></tr></thead>
-          <tbody></tbody>
-        </table>
-      </div>
-    </div>
-    <div id="sub-cron" class="subpanel">
-      <div class="toolbar">
-        <button id="cron-refresh">Обновить</button>
-        <button id="cron-add-btn" class="ok">+ Добавить</button>
-      </div>
-      <div class="table-wrap">
-        <table class="data-table" id="cron-table">
-          <thead><tr><th>Расписание</th><th>Пользователь</th><th>Команда</th><th></th></tr></thead>
-          <tbody></tbody>
-        </table>
-      </div>
-    </div>
-  </section>
-
-  <section id="tab-wifi" class="tab-panel">
-    <h1>WiFi</h1>
-    <div class="toolbar"><button id="wifi-refresh">Обновить</button></div>
-    <div class="grid" id="wifi-grid"></div>
-  </section>
-
-  <section id="tab-network" class="tab-panel">
-    <h1>Сеть</h1>
-    <nav class="subtabs">
-      <button class="subtab active" data-sub="dns">DNS</button>
-      <button class="subtab" data-sub="dhcp">DHCP</button>
-      <button class="subtab" data-sub="nextdns">NextDNS</button>
-    </nav>
-    <div id="sub-dns" class="subpanel active">
-      <div class="toolbar">
-        <button id="dns-refresh">Обновить</button>
-        <input id="dns-new" placeholder="8.8.8.8" style="max-width:200px">
-        <button id="dns-add-btn" class="ok">+ Добавить DNS</button>
-      </div>
-      <div class="table-wrap">
-        <table class="data-table" id="dns-table">
-          <thead><tr><th>DNS-сервер</th><th>Источник</th><th>Тип</th><th>Действие</th></tr></thead>
-          <tbody></tbody>
-        </table>
-      </div>
-    </div>
-    <div id="sub-dhcp" class="subpanel">
-      <div class="toolbar"><button id="dhcp-refresh">Обновить</button></div>
-      <div class="table-wrap">
-        <table class="data-table" id="dhcp-table">
-          <thead><tr><th>Профиль</th><th>Интерфейс</th><th>Сеть</th><th>Диапазон</th><th>Шлюз</th><th>Lease</th><th>Статус</th><th>Исп.</th></tr></thead>
-          <tbody></tbody>
-        </table>
-      </div>
-    </div>
-    <div id="sub-nextdns" class="subpanel">
-      <div class="toolbar">
-        <button id="nextdns-refresh">Обновить</button>
-        <span id="nextdns-status" class="badge">—</span>
-        <button id="nextdns-toggle" class="danger">—</button>
-      </div>
-      <div class="grid" id="nextdns-cards"></div>
-      <h2 class="h2">Профили в системе</h2>
-      <div class="table-wrap">
-        <table class="data-table" id="nextdns-profiles">
-          <thead><tr><th>Имя</th><th>Token</th><th>Ссылка</th></tr></thead>
-          <tbody></tbody>
-        </table>
-      </div>
-      <h2 class="h2">Привязки MAC → профиль</h2>
-      <div class="table-wrap">
-        <table class="data-table" id="nextdns-bindings">
-          <thead><tr><th>MAC</th><th>Профиль</th></tr></thead>
-          <tbody></tbody>
-        </table>
-      </div>
-    </div>
-  </section>
-
-  <section id="tab-clients" class="tab-panel">
-    <h1>Клиенты</h1>
-    <div class="toolbar">
-      <button id="clients-refresh">Обновить</button>
-      <input id="clients-search" placeholder="Поиск по IP / MAC / имени" style="max-width:300px">
-    </div>
-    <div class="table-wrap">
-      <table class="data-table" id="clients-table">
-        <thead><tr><th>IP</th><th>Имя</th><th>MAC</th><th>Статус</th><th>Трафик</th><th>Last seen</th><th>Действия</th></tr></thead>
-        <tbody></tbody>
-      </table>
-    </div>
-  </section>
-
-  <section id="tab-components" class="tab-panel">
-    <h1>Компоненты</h1>
-    <div class="toolbar">
-      <button id="comp-refresh">Обновить</button>
-      <span id="comp-info" class="badge info">—</span>
-    </div>
-    <div class="table-wrap">
-      <table class="data-table" id="comp-table">
-        <thead><tr><th>Компонент</th><th>Описание</th><th>Версия</th><th>Статус</th><th>Действие</th></tr></thead>
-        <tbody></tbody>
-      </table>
-    </div>
-  </section>
-
-  <section id="tab-files" class="tab-panel">
-    <h1>Файлы</h1>
-    <nav class="subtabs">
-      <button class="subtab active" data-sub="usb">USB</button>
-      <button class="subtab" data-sub="browse">Проводник</button>
-    </nav>
-    <div id="sub-usb" class="subpanel active">
-      <div class="toolbar"><button id="usb-refresh">Обновить</button></div>
-      <div class="grid" id="usb-grid"></div>
-    </div>
-    <div id="sub-browse" class="subpanel">
-      <div class="breadcrumb" id="browse-breadcrumb"></div>
-      <div class="table-wrap">
-        <table class="data-table" id="browse-table">
-          <thead><tr><th>Имя</th><th>Тип</th><th>Размер</th><th>Права</th><th>Действия</th></tr></thead>
-          <tbody></tbody>
-        </table>
-      </div>
-    </div>
-  </section>
-
-  <section id="tab-tools" class="tab-panel">
-    <h1>Инструменты</h1>
-    <nav class="subtabs">
-      <button class="subtab active" data-sub="rci">RCI-консоль</button>
-      <button class="subtab" data-sub="logs">Логи</button>
-    </nav>
-
-    <div id="sub-rci" class="subpanel active">
-      <p style="color:var(--fg-dim);font-size:13px;margin-bottom:12px">
-        Введите RCI-команду (например <code>show version</code>, <code>show interface</code>, <code>ip route</code>). Ответ — JSON.
-      </p>
-      <div class="toolbar">
-        <input id="rci-input" placeholder="show version" style="flex:1">
-        <button id="rci-send" class="ok">Отправить</button>
-        <button id="rci-clear">Очистить</button>
-      </div>
-      <div class="toolbar" style="margin-bottom:8px">
-        <span style="color:var(--fg-dim);font-size:12px">Быстрые:</span>
-        <button class="btn-sm" data-rci="show version">show version</button>
-        <button class="btn-sm" data-rci="show system">show system</button>
-        <button class="btn-sm" data-rci="show interface">show interface</button>
-        <button class="btn-sm" data-rci="show ip route">show ip route</button>
-        <button class="btn-sm" data-rci="show ip hotspot host">clients</button>
-        <button class="btn-sm" data-rci="show components">components</button>
-        <button class="btn-sm" data-rci="show running-config">running-config</button>
-      </div>
-      <pre class="console-log" id="rci-output">—</pre>
-    </div>
-
-    <div id="sub-logs" class="subpanel">
-      <div class="toolbar">
-        <button id="logs-refresh">Обновить</button>
-        <select id="logs-select" style="max-width:300px"></select>
-        <span id="logs-count" class="badge info">0</span>
-      </div>
-      <pre class="console-log" id="logs-output">—</pre>
-    </div>
-  </section>
-
-</main>
-
-
-<div class="modal-bg" id="pwd-modal">
-  <div class="modal">
-    <h3>⚠️ Смените стандартный пароль</h3>
-    <p style="color:var(--fg-dim);margin-bottom:16px;font-size:13px">
-      Вы используете стандартный пароль <code>keenui</code>. Это небезопасно — любой в сети может получить доступ к роутеру.
-    </p>
-    <div class="form-row">
-      <div>
-        <label>Новый пароль (мин. 8 символов)</label>
-        <input id="pwd-new" type="password" placeholder="••••••••">
-      </div>
-    </div>
-    <div class="form-row">
-      <div>
-        <label>Повторите пароль</label>
-        <input id="pwd-confirm" type="password" placeholder="••••••••">
-      </div>
-    </div>
-    <div id="pwd-error" class="alert err" style="display:none"></div>
-    <div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap">
-      <button id="pwd-save" class="ok">Сменить пароль</button>
-      <button id="pwd-skip">Позже</button>
-    </div>
-    <p style="color:var(--fg-dim);font-size:11px;margin-top:12px">
-      Логин останется <code>admin</code>. После смены браузер попросит войти заново.
-    </p>
+  <div id="boot-logo" class="boot-phase hidden">
+    <img src="logo/heade.jpg" class="heart" alt="">
+    <div class="raika-text" id="raika-text"></div>
   </div>
 </div>
 
-<script src="/js/app.js?v=30"></script>
-<script>
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/sw.js').catch(()=>{});
-}
-</script>
+<!-- ===== BIOS ===== -->
+<div id="bios" class="hidden">
+
+  <header class="bios-header">
+    <span class="bios-title">// R.A.I.K.A O.S</span>
+    <span class="bios-sub" id="bios-sub">v4.3.9 · aarch64</span>
+  </header>
+
+  <main class="bios-content" id="bios-content">
+
+    <section class="panel active" id="tab-main">
+      <div class="bios-box">
+        <div class="bios-box-title">System Information</div>
+        <div class="bios-rows" id="main-rows"></div>
+      </div>
+    </section>
+
+    <section class="panel" id="tab-advanced">
+      <div class="bios-box">
+        <div class="bios-box-title">Advanced Configuration</div>
+        <div class="bios-rows" id="adv-rows"></div>
+      </div>
+    </section>
+
+    <section class="panel" id="tab-security">
+      <div class="bios-box">
+        <div class="bios-box-title">Security Settings</div>
+        <div class="bios-rows" id="sec-rows"></div>
+      </div>
+    </section>
+
+    <section class="panel" id="tab-boot">
+      <div class="bios-box">
+        <div class="bios-box-title">Boot Configuration</div>
+        <div class="bios-rows" id="boot-rows"></div>
+      </div>
+    </section>
+
+    <section class="panel" id="tab-tools">
+      <div class="bios-box">
+        <div class="bios-box-title">RCI Console</div>
+        <div class="bios-console" id="rci-output">Reika-OS BIOS Console v1.0
+Type command and press ENTER.
+Ready.
+
+&gt; _</div>
+        <div class="bios-input-row">
+          <span class="prompt">&gt;</span>
+          <input id="rci-input" type="text" autocomplete="off" spellcheck="false" placeholder="show version">
+          <button id="rci-send" class="bios-btn">RUN</button>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <div class="bios-corner" id="bios-corner"></div>
+
+</div>
+
+<!-- ===== BOTTOM NAV ===== -->
+<nav class="bios-nav hidden" id="bios-nav">
+  <button class="nav-tab active" data-tab="main" title="Main">▣</button>
+  <button class="nav-tab" data-tab="advanced" title="Advanced">▤</button>
+  <button class="nav-tab" data-tab="security" title="Security">◈</button>
+  <button class="nav-tab" data-tab="boot" title="Boot">▲</button>
+  <button class="nav-tab" data-tab="tools" title="Tools">&gt;_</button>
+  <div class="nav-sep"></div>
+  <button class="nav-power" id="power-btn" title="Logoff">
+    <svg viewBox="0 0 11 11" class="power-ico" width="22" height="22" shape-rendering="crispEdges" aria-hidden="true">
+      <rect x="5" y="0" width="1" height="3" fill="currentColor"/>
+      <rect x="4" y="2" width="3" height="1" fill="currentColor"/>
+      <rect x="3" y="3" width="1" height="6" fill="currentColor"/>
+      <rect x="7" y="3" width="1" height="6" fill="currentColor"/>
+      <rect x="2" y="3" width="1" height="1" fill="currentColor"/>
+      <rect x="8" y="3" width="1" height="1" fill="currentColor"/>
+      <rect x="2" y="4" width="1" height="4" fill="currentColor"/>
+      <rect x="8" y="4" width="1" height="4" fill="currentColor"/>
+      <rect x="2" y="8" width="1" height="1" fill="currentColor"/>
+      <rect x="8" y="8" width="1" height="1" fill="currentColor"/>
+      <rect x="3" y="9" width="1" height="1" fill="currentColor"/>
+      <rect x="7" y="9" width="1" height="1" fill="currentColor"/>
+      <rect x="4" y="10" width="3" height="1" fill="currentColor"/>
+    </svg>
+  </button>
+</nav>
+
+<!-- ===== POWER MODAL ===== -->
+<div class="modal-bg" id="logoff-modal">
+  <div class="modal">
+    <div class="modal-head" id="modal-head">⚠ Confirm Logoff</div>
+    <div class="modal-body">
+      <div class="modal-line" id="modal-line">Do you want to log off the current user?</div>
+      <div class="modal-line dim">user: lunarshe11</div>
+    </div>
+    <div class="modal-actions">
+      <button id="logoff-yes" class="modal-btn">Yes</button>
+      <button id="logoff-no"  class="modal-btn">No</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== POWER SCREEN ===== -->
+<div id="logoff-screen" class="hidden">
+  <img src="logo/sadsmile.jpg" class="logoff-sad" alt="">
+</div>
+
+<script src="script.js"></script>
 </body>
 </html>

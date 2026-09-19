@@ -1,117 +1,125 @@
-# Keen UI
+# Reika-OS
 
-[![GitHub](https://img.shields.io/badge/github-lunarshe11%2Fkeenui-blue)](https://github.com/lunarshe11/keenui)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+> BIOS-style web panel for Keenetic routers.
 
-Альтернативная веб-панель для роутеров **Keenetic** с расширенными возможностями.
-
-> **Автор:** [lunarshe11](https://github.com/lunarshe11)
-> **Репозиторий:** https://github.com/lunarshe11/keenui
+**Author:** [lunarshe11](https://github.com/lunarshe11) · [mewsh](https://github.com/mewsh)
+**Router:** Keenetic Hopper (KN-3811) · KeeneticOS 4.3.9
 
 ---
 
-## Важное предупреждение
+## About
 
-**Проект полностью написан искусственным интеллектом.**
+Reika-OS is an alternative web panel for Keenetic routers, built on top of **Entware** + **lighttpd**. It speaks to the router through the native **RCI** API and shows live system state in the aesthetic of an Award BIOS from the 90s.
 
-Человек ([lunarshe11](https://github.com/lunarshe11)) выступал только в роли:
+The project is named after **Reika (雷華)** — a fictional character: a quiet 16-year-old girl with long blue hair and blue eyes, who wears a school uniform and a clown mask in public. Behind the mask she codes, listens to breakcore, and writes scripts just to keep her GitHub squares green. At home, after Logoff, the blue cube vanishes and the mask falls off.
 
-- **руководителя** — ставил задачи, определял что делать
-- **тестировщика** — запускал, проверял, сообщал об ошибках
-- **пользователя** — принимал финальный результат
+Reika-OS is what she sees when the cube is near — a quick flash of `init → kub → link → sync → scan → load → verify → online`, then **R.A.I.K.A O.S** in the dark.
 
-**Весь код (фронтенд, backend, скрипты, документация) сгенерирован ИИ.**
-
-Это значит:
-
-- Код может содержать неочевидные баги и уязвимости
-- Стиль программирования непредсказуем
-- Логика местами может быть избыточной или странной
-- **Используйте на свой риск** — особенно на продакшн-роутерах
-
-Проект создан в исследовательских целях и как демонстрация возможностей ИИ в разработке под встраиваемые системы.
+*The cube doesn't speak. But the bootlog does.*
 
 ---
 
-## Возможности
+## Features
 
-| Вкладка | Что умеет |
+| Tab | What it does |
 |---|---|
-| **Дашборд** | Модель, прошивка, Uptime, RAM, Swap, CPU, температура — авто 10с |
-| **Система** | Hostname, Domain, 12 метрик + Reboot |
-| **Keen** | vnstat, darkstat, cron (CRUD) |
-| **WiFi** | 5GHz + 2.4GHz — SSID, пароль, вкл/выкл |
-| **Сеть** | DNS (CRUD), DHCP пулы, NextDNS |
-| **Клиенты** | Трафик, Static IP, WOL, Block, переименование |
-| **Компоненты** | Установка/удаление компонентов KeeneticOS |
-| **Файлы** | USB + проводник (скачать/удалить/переименовать) |
-| **Инструменты** | RCI-консоль + просмотр логов |
+| **Main** | Model, firmware, uptime, CPU, RAM, connections — from the live router |
+| **Advanced** | Detailed memory metrics, swap, connection table |
+| **Security** | HTTP/HTTPS ports, TELNET status, lockout policy |
+| **Boot** | Active + backup firmware slot, dual image, Save / Reboot / Shutdown |
+| **Tools** | RCI console — `show version`, `show interface`, `show ip hotspot host`, etc. |
 
-## Требования
+### Highlights
 
-- Роутер **Keenetic** с USB-портом
-- **Entware** установлен на USB
-- KeeneticOS **4.x** или **5.x**
-- Архитектура: aarch64, mipsel, mips (проверь uname -m)
+- **BIOS boot screen** — bootlog → blue screen → heart → `R.A.I.K.A O.S`
+- **Power actions** — Logoff / Reboot / Shutdown with glitch sequence, Japanese noise and `wake up ×3`
+- **Glitch engine** — screen inverts, RGB shifts, artifacts grow
+- **PWA** — installable on phone home screen
 
-## Установка
+---
 
-Одна команда (SSH в роутер):
+## Requirements
 
-    wget -O - https://raw.githubusercontent.com/lunarshe11/keenui/main/install.sh | sh
+- Keenetic router with USB port
+- Entware installed on USB
+- KeeneticOS 4.x / 5.x
+- Packages: `lighttpd`, `lighttpd-mod-cgi`, `lighttpd-mod-auth`, `lighttpd-mod-authn_file`, `curl`, `python3`
 
-После установки:
+---
 
-- URL: http://192.168.1.1/
-- Логин: admin
-- Пароль: keenui
+## Install
 
-**При первом входе UI предложит сменить пароль.**
+```bash
+# 1. Packages
+opkg update
+opkg install lighttpd lighttpd-mod-cgi lighttpd-mod-auth lighttpd-mod-authn_file curl python3
 
-## Удаление
+# 2. Directories
+mkdir -p /opt/var/www/{logo,cgi-bin}
+mkdir -p /opt/etc/lighttpd /opt/var/log/lighttpd
 
-    wget -O - https://raw.githubusercontent.com/lunarshe11/keenui/main/uninstall.sh | sh
+# 3. Clone
+mkdir -p /opt/share/ai/github/repos
+cd /opt/share/ai/github/repos
+git clone https://github.com/mewsh/raika-os.git
 
-## Безопасность
+# 4. Copy files
+cd raika-os
+cp files/www/index.html  /opt/var/www/
+cp files/www/style.css   /opt/var/www/
+cp files/www/script.js   /opt/var/www/
+cp files/www/logo/*.jpg  /opt/var/www/logo/
+cp files/www/cgi-bin/api /opt/var/www/cgi-bin/api
+chmod +x /opt/var/www/cgi-bin/api
+cp files/lighttpd/lighttpd.conf /opt/etc/lighttpd/lighttpd.conf
+cp files/init.d/S80lighttpd /opt/etc/init.d/
+chmod +x /opt/etc/init.d/S80lighttpd
 
-- **Basic Auth** через lighttpd — защищает весь UI и API
-- Логин по умолчанию: admin / keenui
-- **Смени пароль при первом входе** (UI сам предложит)
-- Файл пользователей: /opt/etc/lighttpd/lighttpd.user
+# 5. Credentials
+printf 'reika:os\n' > /opt/etc/lighttpd/lighttpd.user
+chmod 600 /opt/etc/lighttpd/lighttpd.user
 
-## FAQ
+# 6. Move original admin to :8080
+ndmc -c "ip http port 8080"
+ndmc -c "system configuration save"
 
-**Q: Что с оригинальной админкой?**
-A: Она остаётся на порту :8080. UI её не ломает.
+# 7. Start
+/opt/etc/init.d/S80lighttpd start
+```
 
-**Q: Это безопасно?**
-A: Проект написан ИИ — используйте на свой риск. Не рекомендую для продакшна без аудита.
+Open http://192.168.1.1/ → login reika / password os.
 
-**Q: Обновление прошивки Keenetic снесёт Keen UI?**
-A: Entware обычно сохраняется на USB. Если слетит — запусти install.sh заново.
+---
 
-**Q: Как сменить пароль вручную?**
+Repo structure
 
-    printf "admin:новый-пароль\n" > /opt/etc/lighttpd/lighttpd.user
-    /opt/etc/init.d/S80lighttpd restart
+```
+raika-os/
+├── files/
+│   ├── init.d/S80lighttpd        # autostart
+│   ├── lighttpd/lighttpd.conf    # web server config
+│   └── www/
+│       ├── cgi-bin/api           # CGI → RCI bridge
+│       ├── logo/                 # icons
+│       ├── index.html
+│       ├── script.js
+│       └── style.css
+├── docs/
+│   ├── api.md
+│   └── install.md
+├── about.md
+├── README.md
+└── CHANGELOG.md
+```
 
-## Про создание
+---
 
-Проект разработан в диалоге человек и ИИ:
+Warning
 
-- **ИИ:** весь код, документация, скрипты
-- **Человек:** постановка задач, тестирование, обратная связь
+Don't click on the heart.
 
-Такой подход позволил за один день собрать полноценную альтернативу оригинальной админке Keenetic с 9 вкладками и расширениями — без опыта в веб-разработке у человека.
+---
 
-Если найдёшь баги — welcome в Issues: https://github.com/lunarshe11/keenui/issues
+License
 
-## Лицензия
-
-MIT — см. LICENSE
-
-## Благодарности
-
-- **ИИ** — за написание всего кода
-- **Keenetic** — за RCI API и документацию
-- **Entware** — за пакеты
+MIT

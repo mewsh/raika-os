@@ -1,560 +1,74 @@
 #!/opt/bin/sh
 export PATH=/opt/bin:/opt/sbin:/bin:/sbin:/usr/bin:/usr/sbin
+
+RCI="http://127.0.0.1:79/rci"
+
 echo "Content-Type: application/json"
 echo "Access-Control-Allow-Origin: *"
 echo ""
-
-RCI="http://127.0.0.1:79/rci"
-DS="http://127.0.0.1:667"
-CRONFILE="/opt/etc/crontab"
 
 CMD=""; ARG=""; ARG2=""
 if [ -n "$QUERY_STRING" ]; then
   for pair in $(echo "$QUERY_STRING" | tr '&' ' '); do
     k="${pair%%=*}"; v="${pair#*=}"
     case "$k" in
-      cmd) CMD="$v" ;;
-      arg) ARG=$(echo "$v" | sed 's/%20/ /g; s/%2F/\//g; s/%22/"/g; s/%3A/:/g') ;;
-      arg2) ARG2=$(echo "$v" | sed 's/%20/ /g; s/%2F/\//g; s/%22/"/g; s/%3A/:/g') ;;
+      cmd)  CMD="$v" ;;
+      arg)  ARG=$(printf '%b' "${v//%/\\x}") ;;
+      arg2) ARG2=$(printf '%b' "${v//%/\\x}") ;;
     esac
   done
 fi
 
 rci_post() {
-  curl -s -X POST "$RCI/" -H "Content-Type: application/json" -d "$1"
+  curl -s -X POST "$RCI/" \
+    -H "Content-Type: application/json" \
+    --data-binary "$1" 2>&1
 }
 
-json_err() { echo '{"error":"'"$1"'"}'; }
+rci_show() {
+  local path="$1"
+  local json
+  json=$(python3 -c '
+import sys, json
+parts = [p for p in sys.argv[1].split("/") if p]
+d = {}; cur = d
+for p in parts[:-1]:
+    cur[p] = {}; cur = cur[p]
+cur[parts[-1]] = {}
+print(json.dumps([{"show": d}], ensure_ascii=False))
+' "$path")
+  rci_post "$json"
+}
+
+rci_cmd() {
+  local cmd
+  cmd=$(printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g')
+  rci_post "[{\"parse\":\"$cmd\"}]"
+}
+
+rci_save() {
+  rci_post '[{"parse":"system configuration save"}]' >/dev/null 2>&1
+}
 
 case "$CMD" in
-  version)     curl -s "$RCI/show/version" ;;
-  interfaces)  curl -s "$RCI/show/interface" ;;
-  system)      curl -s "$RCI/show/system" ;;
-  probe)       curl -s "$RCI/probe" ;;
+  # ---------- read ----------
+  version)        rci_show "version" ;;
+  system)         rci_show "system" ;;
+  interfaces)     rci_show "interface" ;;
+  clients)        rci_show "ip/hotspot/host" ;;
+  dhcp)           rci_show "ip/dhcp/pool" ;;
+  usb)            rci_show "usb" ;;
+  dns)            rci_show "ip/name-server" ;;
+  processes)      rci_show "processes" ;;
+  running-config) rci_cmd "show running-config" ;;
 
-  # ---- vnstat ----
-  vnstat)         vnstat --json 2>&1 ;;
-  vnstat-if)      vnstat --json -i "$ARG" 2>&1 ;;
-  vnstat-oneline) vnstat --oneline -i "${ARG:-br0}" 2>&1 ;;
-  vnstati)        MODE="${ARG:-s}"; OUT="/opt/keen/www/img/vnstat-live.png"
-                  vnstati -${MODE} -i br0 -o "$OUT" 2>/dev/null && \
-                    echo "{\"url\":\"/img/vnstat-live.png?t=$(date +%s)\"}" || \
-                    json_err "vnstati failed" ;;
+  # ---------- write ----------
+  reboot)         rci_cmd "system reboot" ;;
+  shutdown)       rci_cmd "system shutdown" ;;
+  save)           rci_save; echo '{"status":"ok"}' ;;
 
-  # ---- darkstat ----
-  darkstat-overview)
-    HTML=$(wget -qO- "$DS/")
-    UPTIME=$(echo "$HTML"   | grep -o 'id="rf">[^<]*' | head -1 | sed 's/id="rf">//')
-    SINCE=$(echo "$HTML"    | grep -oE 'since</b> [0-9-]+ [0-9:]+ [A-Z+0-9]+' | head -1 | sed 's|since</b> ||')
-    BYTES=$(echo "$HTML"    | grep -o 'id="tb">[0-9,]*' | head -1 | sed 's/id="tb">//; s/,//g')
-    PACKETS=$(echo "$HTML"  | grep -o 'id="tp">[0-9,]*' | head -1 | sed 's/id="tp">//; s/,//g')
-    CAPTURED=$(echo "$HTML" | grep -o 'id="pc">[0-9,]*' | head -1 | sed 's/id="pc">//; s/,//g')
-    DROPPED=$(echo "$HTML"  | grep -o 'id="pd">[0-9,]*' | head -1 | sed 's/id="pd">//; s/,//g')
-    printf '{"uptime":"%s","since":"%s","bytes":%s,"packets":%s,"captured":%s,"dropped":%s}\n' \
-      "$UPTIME" "$SINCE" "${BYTES:-0}" "${PACKETS:-0}" "${CAPTURED:-0}" "${DROPPED:-0}"
-    ;;
+  # ---------- произвольный RCI ----------
+  rci)            rci_cmd "$ARG" ;;
 
-  darkstat-hosts)
-    echo "["
-    wget -qO- "$DS/hosts/?full=yes&sort=total" \
-      | tr -d '\n' \
-      | sed 's|<tr class="alt|\n<tr class="alt|g' \
-      | grep '^<tr class="alt' \
-      | awk '
-        BEGIN{first=1}
-        {
-          ip="";mac="";last="";inb="";outb="";tot=""
-          p=index($0,"href=\"./");if(p>0){r=substr($0,p+8);q=index(r,"/");ip=substr(r,1,q-1)}
-          p=index($0,"<tt>");if(p>0){r=substr($0,p+4);q=index(r,"</tt>");mac=substr(r,1,q-1)}
-          n=split($0,parts,"<td class=\"num\">")
-          for(i=2;i<=n;i++){q=index(parts[i],"</td>");v=substr(parts[i],1,q-1)
-            if(i==2){gsub(/,/,"",v);inb=v}
-            else if(i==3){gsub(/,/,"",v);outb=v}
-            else if(i==4){gsub(/,/,"",v);tot=v}
-            else if(i==5){last=v}}
-          if(ip=="")next
-          if(!first)print ","
-          first=0
-          printf "  {\"ip\":\"%s\",\"mac\":\"%s\",\"in\":%s,\"out\":%s,\"total\":%s,\"last\":\"%s\"}",ip,mac,inb,outb,tot,last
-        }
-        END{print ""}
-      '
-    echo "]"
-    ;;
-
-  darkstat-status) ps|grep darkstat|grep -v grep>/dev/null && echo '{"status":"running"}'||echo '{"status":"stopped"}' ;;
-  darkstat-start)  /opt/etc/init.d/S54darkstat start>/dev/null 2>&1; echo '{"status":"started"}' ;;
-  darkstat-stop)   /opt/etc/init.d/S54darkstat stop>/dev/null 2>&1; echo '{"status":"stopped"}' ;;
-
-  # ---- cron (полный CRUD) ----
-  cron-list)
-    echo "["
-    if [ -f "$CRONFILE" ]; then
-      awk 'NF && $1 !~ /^#/ && $0 !~ /^TZ=/ {printf "{\"line\":\"%s\"},\n",$0}' "$CRONFILE" | sed '$ s/,$//'
-    fi
-    echo "]"
-    ;;
-  cron-add)
-    # ARG = "min hour day month wday user command"
-    if [ -z "$ARG" ]; then json_err "empty"; else
-      echo "$ARG" >> "$CRONFILE"
-      echo '{"status":"ok"}'
-    fi
-    ;;
-  cron-del)
-    # ARG = точная строка для удаления
-    if [ -f "$CRONFILE" ] && [ -n "$ARG" ]; then
-      grep -vF "$ARG" "$CRONFILE" > /tmp/cron.new
-      cp /tmp/cron.new "$CRONFILE"
-      echo '{"status":"ok"}'
-    else json_err "not found"; fi
-    ;;
-
-  # ---- системная информация (карточки) ----
-  sysinfo)
-    echo "{"
-    echo '  "version":'; curl -s "$RCI/show/version"; echo ","
-    echo '  "system":';  curl -s "$RCI/show/system";  echo ","
-    echo '  "cpu":';     curl -s "$RCI/show/cpu";     echo ","
-    echo '  "memory":';  curl -s "$RCI/show/memory"; echo ","
-    echo '  "uptime":';  curl -s "$RCI/show/system/uptime"
-    echo "}"
-    ;;
-
-  # ---- WiFi ----
-  wifi-list)
-    r_ap5=$(rci_post '{"show":{"interface":{"name":"WifiMaster1/AccessPoint0"}}}')
-    r_ap24=$(rci_post '{"show":{"interface":{"name":"WifiMaster0/AccessPoint1"}}}')
-    r_m5=$(rci_post '{"show":{"interface":{"name":"WifiMaster1"}}}')
-    r_m24=$(rci_post '{"show":{"interface":{"name":"WifiMaster0"}}}')
-
-    ssid5=$(echo "$r_ap5"   | grep -oE '"ssid": *"[^"]*"' | head -1 | sed 's/.*: *"//; s/"$//')
-    enc5=$(echo "$r_ap5"    | grep -oE '"encryption": *"[^"]*"' | head -1 | sed 's/.*: *"//; s/"$//')
-    st5=$(echo "$r_ap5"     | grep -oE '"state": *"[^"]*"' | head -1 | sed 's/.*: *"//; s/"$//')
-    ch5=$(echo "$r_m5"      | grep -oE '"channel": *[0-9]+' | head -1 | sed 's/.*: *//')
-    bw5=$(echo "$r_m5"      | grep -oE '"bandwidth": *"[^"]*"' | head -1 | sed 's/.*: *"//; s/"$//')
-    temp5=$(echo "$r_m5"    | grep -oE '"temperature": *[0-9]+' | head -1 | sed 's/.*: *//')
-
-    ssid24=$(echo "$r_ap24" | grep -oE '"ssid": *"[^"]*"' | head -1 | sed 's/.*: *"//; s/"$//')
-    enc24=$(echo "$r_ap24"  | grep -oE '"encryption": *"[^"]*"' | head -1 | sed 's/.*: *"//; s/"$//')
-    st24=$(echo "$r_ap24"   | grep -oE '"state": *"[^"]*"' | head -1 | sed 's/.*: *"//; s/"$//')
-    ch24=$(echo "$r_m24"    | grep -oE '"channel": *[0-9]+' | head -1 | sed 's/.*: *//')
-    bw24=$(echo "$r_m24"    | grep -oE '"bandwidth": *"[^"]*"' | head -1 | sed 's/.*: *"//; s/"$//')
-    temp24=$(echo "$r_m24"  | grep -oE '"temperature": *[0-9]+' | head -1 | sed 's/.*: *//')
-
-    printf '['
-    printf '{"label":"5 GHz","key":"WifiMaster1/AccessPoint0","master":"WifiMaster1","ssid":"%s","encryption":"%s","channel":"%s","bandwidth":"%s","state":"%s","temperature":"%s"}' \
-      "$ssid5" "$enc5" "$ch5" "$bw5" "$st5" "$temp5"
-    printf ','
-    printf '{"label":"2.4 GHz","key":"WifiMaster0/AccessPoint1","master":"WifiMaster0","ssid":"%s","encryption":"%s","channel":"%s","bandwidth":"%s","state":"%s","temperature":"%s"}' \
-      "$ssid24" "$enc24" "$ch24" "$bw24" "$st24" "$temp24"
-    printf ']\n'
-    ;;
-  wifi-ssid)
-    rci_post "{\"parse\":\"interface $ARG ssid $ARG2\"}"
-    ;;
-  wifi-password)
-    rci_post "{\"parse\":\"interface $ARG authentication wpa-psk $ARG2\"}"
-    ;;
-  wifi-up)
-    rci_post "{\"parse\":\"interface $ARG up\"}"
-    ;;
-  wifi-down)
-    rci_post "{\"parse\":\"interface $ARG down\"}"
-    ;;
-  # ---- Клиенты (hotspot) ----
-  clients)
-    curl -s "$RCI/show/ip/hotspot/host"
-    ;;
-  client-wol)
-    rci_post "{\"parse\":\"ip hotspot wake $ARG\"}"
-    ;;
-  client-static)
-    rci_post "{\"parse\":\"ip dhcp host $ARG $ARG2\"}"
-    rci_post '{"parse":"system configuration save"}'
-    ;;
-  client-static-remove)
-    rci_post "{\"parse\":\"no ip dhcp host $ARG\"}"
-    rci_post '{"parse":"system configuration save"}'
-    ;;
-  client-block)
-    rci_post "{\"parse\":\"ip hotspot host $ARG deny\"}"
-    rci_post '{"parse":"system configuration save"}'
-    ;;
-  client-unblock)
-    rci_post "{\"parse\":\"ip hotspot host $ARG permit\"}"
-    rci_post '{"parse":"system configuration save"}'
-    ;;
-  client-rename)
-    rci_post "{\"parse\":\"known host $ARG2 $ARG\"}"
-    rci_post '{"parse":"system configuration save"}'
-    ;;
-
-  # ---- DNS ----
-  dns-add)
-    rci_post "{\"parse\":\"ip name-server $ARG\"}"
-    ;;
-  dns-remove)
-    rci_post "{\"parse\":\"no ip name-server $ARG\"}"
-    rci_post '{"parse":"system configuration save"}'
-    ;;
-  dns-list)
-    curl -s "$RCI/show/ip/name-server" | python3 -c '
-import sys, json
-try:
-    d = json.load(sys.stdin)
-except Exception as e:
-    print(json.dumps({"error":"parse: "+str(e)}, ensure_ascii=False))
-    sys.exit(0)
-srv = d.get("server", [])
-out = []
-for s in srv:
-    out.append({
-        "address": s.get("address",""),
-        "domain": s.get("domain",""),
-        "interface": s.get("interface",""),
-        "service": s.get("service",""),
-        "global": s.get("global",0)
-    })
-print(json.dumps({"servers": out}, ensure_ascii=False))
-'
-    ;;
-
-
-
-
-  nextdns-active)
-    curl -s "$RCI/show/dns-proxy" | python3 -c '
-import sys, json, re
-try: d=json.load(sys.stdin)
-except: print("{}"); sys.exit()
-safe=""
-for p in d.get("proxy-status",[]):
-    if "proxy-safe" in p: safe=p["proxy-safe"]; break
-out={"enabled": "nextdns" in safe, "id":"", "profiles":[], "bindings":[], "servers":[]}
-m=re.search(r"nextdns\.io/@([A-Za-z0-9]+)", safe)
-if m: out["id"]=m.group(1)
-profs={}
-for m in re.finditer(r"profile\s+(\d+)\s+([\w-]+)", safe):
-    profs.setdefault(m.group(1),{"id":m.group(1),"type":m.group(2),"options":[],"servers":[]})
-for m in re.finditer(r"profile-set-option\s+(\d+)\s+(\d+)", safe):
-    if m.group(1) in profs: profs[m.group(1)]["options"].append(m.group(2))
-for m in re.finditer(r"profile-set-server\s+(\d+)\s+([\d.:]+)\s*#\s*([^\n]+)", safe):
-    if m.group(1) in profs:
-        profs[m.group(1)]["servers"].append({"addr":m.group(2),"url":m.group(3).strip()})
-    if m.group(2) not in out["servers"]: out["servers"].append(m.group(2))
-for m in re.finditer(r"set-profile\s+([0-9a-f:]{17})\s+(\d+)", safe):
-    out["bindings"].append({"mac":m.group(1),"profile":m.group(2)})
-out["profiles"]=list(profs.values())
-print(json.dumps(out, ensure_ascii=False))
-'
-    ;;
-
-  nextdns-profiles)
-    rci_post '{"parse":"show nextdns profiles"}'
-    ;;
-
-  nextdns-disable)
-    rci_post "{\"parse\":\"no dns-proxy filter engine\"}"
-    rci_post '{"parse":"system configuration save"}'
-    ;;
-
-  nextdns-enable)
-    rci_post "{\"parse\":\"dns-proxy filter engine nextdns\"}"
-    rci_post '{"parse":"system configuration save"}'
-    ;;
-
-  # ---- DHCP пулы ----
-  dhcp-get)
-    curl -s "$RCI/show/ip/dhcp/pool"
-    ;;
-
-  # ---- USB / Media ----
-  usb-list)
-    curl -s "$RCI/show/usb"
-    ;;
-  media-list)
-    curl -s "$RCI/show/media"
-    ;;
-  media-browse)
-    DIR="${ARG:-/opt}"
-    # Исключаем псевдо-ФС — там мусор
-    case "$DIR" in
-      /proc|/proc/*|/sys|/sys/*|/dev|/dev/*)
-        echo '[]'
-        ;;
-      *)
-        if [ -L "$DIR" ]; then
-          TARGET=$(readlink -f "$DIR" 2>/dev/null)
-          [ -n "$TARGET" ] && DIR="$TARGET"
-        fi
-        echo "["
-        if [ -d "$DIR" ]; then
-          FIRST=1
-          for f in "$DIR"/* "$DIR"/.[!.]* "$DIR"/..?*; do
-            [ -e "$f" ] || [ -L "$f" ] || continue
-            NAME=$(basename "$f")
-            [ "$NAME" = "." ] && continue
-            [ "$NAME" = ".." ] && continue
-            # Определяем тип
-            if [ -L "$f" ]; then
-              T="link"; SZ=0
-            elif [ -d "$f" ]; then
-              T="dir"; SZ=0
-            else
-              T="file"
-              SZ=$(wc -c < "$f" 2>/dev/null)
-              # Оставляем только цифры
-              SZ=$(echo "$SZ" | tr -cd '0-9')
-              [ -z "$SZ" ] && SZ=0
-            fi
-            MODE=$(ls -ld "$f" 2>/dev/null | awk '{print $1}')
-            [ -z "$MODE" ] && MODE="---------"
-            # Экранируем JSON-спецсимволы
-            NAME_ESC=$(printf '%s' "$NAME" | sed 's/\\/\\\\/g; s/"/\\"/g')
-            MODE_ESC=$(printf '%s' "$MODE" | sed 's/\\/\\\\/g; s/"/\\"/g')
-            if [ "$FIRST" = "0" ]; then echo ","; fi
-            FIRST=0
-            printf '{"name":"%s","type":"%s","size":%s,"mode":"%s"}' "$NAME_ESC" "$T" "$SZ" "$MODE_ESC"
-          done
-        fi
-        echo ""
-        echo "]"
-        ;;
-    esac
-    ;;
-
-  # ---- Компоненты KeeneticOS ----
-  components-list)
-    rci_post '{"parse":"components list"}' | python3 -c '
-import sys, json
-try:
-    d = json.load(sys.stdin)
-except Exception as e:
-    print(json.dumps({"error":"parse: "+str(e)}, ensure_ascii=False))
-    sys.exit(0)
-comp = d.get("parse",{}).get("component",{})
-fw = d.get("parse",{}).get("firmware",{})
-out = []
-for name, info in comp.items():
-    desc = info.get("description",{})
-    ru = desc.get("RU") or desc.get("EN") or ""
-    inst = info.get("installed","")
-    is_inst = bool(inst)
-    queued = info.get("queued", False)
-    group = info.get("group","")
-    size = info.get("size","0")
-    out.append({
-        "name": name,
-        "description": ru,
-        "installed": is_inst,
-        "installed_version": inst,
-        "version": info.get("version",""),
-        "group": group,
-        "size": size,
-        "queued": queued
-    })
-out.sort(key=lambda x: (not x["installed"], x["group"], x["name"]))
-print(json.dumps({"components":out,"firmware":fw}, ensure_ascii=False))
-'
-    ;;
-
-  components-install)
-    rci_post "{\"parse\":\"components install $ARG\"}"
-    ;;
-
-  components-remove)
-    rci_post "{\"parse\":\"components remove $ARG\"}"
-    ;;
-
-  components-commit)
-    rci_post '{"parse":"components commit"}'
-    ;;
-
-  components-install-set)
-    # ARG = имя, в ответ добавим commit
-    rci_post "{\"parse\":\"components install $ARG\"}"
-    ;;
-
-  file)
-    # ARG = полный путь к файлу
-    if [ -f "$ARG" ]; then
-      # Определяем MIME
-      case "$ARG" in
-        *.png) MT="image/png" ;;
-        *.jpg|*.jpeg) MT="image/jpeg" ;;
-        *.gif) MT="image/gif" ;;
-        *.svg) MT="image/svg+xml" ;;
-        *.pdf) MT="application/pdf" ;;
-        *.txt|*.log|*.conf|*.md) MT="text/plain; charset=utf-8" ;;
-        *.json) MT="application/json" ;;
-        *.zip) MT="application/zip" ;;
-        *.mp4) MT="video/mp4" ;;
-        *.mp3) MT="audio/mpeg" ;;
-        *) MT="application/octet-stream" ;;
-      esac
-      # Переопределяем Content-Type (уже вывели json в начале — просто добавим ещё заголовки, браузер возьмёт последний)
-      echo "Content-Type: $MT"
-      echo "Content-Disposition: inline; filename=\"$(basename "$ARG")\""
-      echo ""
-      cat "$ARG"
-    else
-      echo '{"error":"file not found","path":"'"$ARG"'"}'
-    fi
-    ;;
-
-  file-delete)
-    if [ -f "$ARG" ]; then
-      rm -f "$ARG" && echo '{"status":"deleted"}' || echo '{"error":"rm failed"}'
-    elif [ -d "$ARG" ]; then
-      rmdir "$ARG" 2>/dev/null && echo '{"status":"deleted"}' || echo '{"error":"dir not empty"}'
-    else
-      echo '{"error":"not found"}'
-    fi
-    ;;
-
-  file-mkdir)
-    mkdir -p "$ARG" && echo '{"status":"created"}' || echo '{"error":"mkdir failed"}'
-    ;;
-
-  file-delete)
-    if [ -z "$ARG" ]; then echo '{"error":"empty path"}'; exit 0; fi
-    if [ -f "$ARG" ]; then
-      rm -f "$ARG" && echo '{"status":"deleted","path":"'"$ARG"'"}' || echo '{"error":"rm failed"}'
-    elif [ -d "$ARG" ]; then
-      rmdir "$ARG" 2>/dev/null && echo '{"status":"deleted"}' || echo '{"error":"dir not empty or no perm"}'
-    else
-      echo '{"error":"not found: '"$ARG"'"}'
-    fi
-    ;;
-
-  file-rename)
-    if [ -z "$ARG" ] || [ -z "$ARG2" ]; then echo '{"error":"empty args"}'; exit 0; fi
-    DIR=$(dirname "$ARG")
-    if [ -e "$ARG" ]; then
-      mv "$ARG" "$DIR/$ARG2" 2>&1 && echo '{"status":"renamed"}' || echo '{"error":"mv failed"}'
-    else
-      echo '{"error":"not found: '"$ARG"'"}'
-    fi
-    ;;
-
-  file-mkdir)
-    if [ -z "$ARG" ]; then echo '{"error":"empty path"}'; exit 0; fi
-    mkdir -p "$ARG" 2>&1 && echo '{"status":"created"}' || echo '{"error":"mkdir failed"}'
-    ;;
-
-  logs-lighttpd)
-    if [ -f /opt/var/log/lighttpd/error.log ]; then
-      python3 -c '
-import json,sys
-p="/opt/var/log/lighttpd/error.log"
-try:
-    with open(p,"r",errors="replace") as f:
-        lines=f.readlines()[-300:]
-    print(json.dumps({"file":p,"lines":[l.rstrip() for l in lines]},ensure_ascii=False))
-except Exception as e:
-    print(json.dumps({"error":str(e)}))
-'
-    else
-      echo '{"error":"no log file"}'
-    fi
-    ;;
-
-  logs-access)
-    if [ -f /opt/var/log/lighttpd/access.log ]; then
-      tail -300 /opt/var/log/lighttpd/access.log | python3 -c '
-import json,sys
-lines=[l.rstrip() for l in sys.stdin.readlines()]
-print(json.dumps({"lines":lines},ensure_ascii=False))
-'
-    else
-      echo '{"error":"no log file"}'
-    fi
-    ;;
-
-  logs-syslog)
-    if [ -f /opt/var/log/messages ]; then
-      tail -300 /opt/var/log/messages | python3 -c '
-import json,sys
-lines=[l.rstrip() for l in sys.stdin.readlines()]
-print(json.dumps({"lines":lines},ensure_ascii=False))
-'
-    else
-      echo '{"error":"no messages"}'
-    fi
-    ;;
-
-  logs-file)
-    if [ -z "$ARG" ] || [ ! -f "$ARG" ]; then
-      echo '{"error":"not found: '"$ARG"'"}'
-    else
-      python3 -c '
-import json,sys
-p=sys.argv[1]
-try:
-    with open(p,"r",errors="replace") as f:
-        lines=f.readlines()[-500:]
-    print(json.dumps({"file":p,"lines":[l.rstrip() for l in lines]},ensure_ascii=False))
-except Exception as e:
-    print(json.dumps({"error":str(e)}))
-' "$ARG"
-    fi
-    ;;
-
-  logs-list)
-    python3 -c '
-import json,os
-dirs=["/opt/var/log","/opt/var/log/lighttpd","/var/log","/tmp/log"]
-out=[]
-seen=set()
-for d in dirs:
-    if not os.path.isdir(d): continue
-    for f in os.listdir(d):
-        p=os.path.join(d,f)
-        if not os.path.isfile(p): continue
-        if p in seen: continue
-        if not (f.endswith(".log") or f=="messages" or "log" in f.lower()): continue
-        seen.add(p)
-        try: sz=os.path.getsize(p)
-        except: sz=0
-        out.append({"path":p,"name":f,"size":sz})
-out.sort(key=lambda x:x["name"])
-print(json.dumps({"logs":out},ensure_ascii=False))
-'
-    ;;
-
-
-  rci)
-    # ARG = произвольная RCI-команда (например "show version")
-    rci_post "{\"parse\":\"$ARG\"}"
-    ;;
-
-  pwd-status)
-    if [ -f /opt/keen/.pwd_changed ]; then
-      echo '{"changed":true}'
-    else
-      echo '{"changed":false}'
-    fi
-    ;;
-
-  pwd-change)
-    if [ ${#ARG} -lt 8 ]; then
-      echo '{"status":"error","message":"Пароль должен быть не менее 8 символов"}'
-    elif [ "$ARG" = "keenui" ]; then
-      echo '{"status":"error","message":"Нельзя использовать стандартный пароль"}'
-    else
-      printf 'admin:%s\n' "$ARG" > /opt/etc/lighttpd/lighttpd.user
-      chmod 600 /opt/etc/lighttpd/lighttpd.user
-      touch /opt/keen/.pwd_changed
-      # Перезапуск lighttpd в фоне (чтобы не оборвать текущий запрос)
-      (sleep 1; /opt/etc/init.d/S80lighttpd restart) > /dev/null 2>&1 &
-      echo '{"status":"ok","message":"Пароль изменён. Войдите с новым паролем."}'
-    fi
-    ;;
-
-  # ---- RCI generic ----
-  exec)  rci_post "{\"parse\":\"exec $ARG\"}" ;;
-  parse) rci_post "{\"parse\":\"$ARG\"}" ;;
-
-  *) echo '{"error":"unknown cmd","cmd":"'"$CMD"'"}' ;;
+  *)  echo '{"error":"unknown cmd","cmd":"'"$CMD"'"}' ;;
 esac
